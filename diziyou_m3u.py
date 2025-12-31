@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Diziyou M3U Oluşturucu
-Tek script ile tüm işlemler
+Diziyou M3U Oluşturucu - Güncellenmiş Sürüm
 """
-
 import requests
 import random
 import time
@@ -12,164 +10,128 @@ import re
 from bs4 import BeautifulSoup
 from datetime import datetime
 import sys
-import os
 
-# Rastgele User-Agent listesi
 USER_AGENTS = [
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_2) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15',
-    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
 ]
 
 def get_random_headers(referer=None):
-    """Rastgele headers oluştur"""
     headers = {
         'User-Agent': random.choice(USER_AGENTS),
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7',
-        'Accept-Encoding': 'gzip, deflate',
-        'DNT': '1',
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1',
-        'Cache-Control': 'max-age=0'
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
     }
     if referer:
         headers['Referer'] = referer
     return headers
 
 def get_base_url():
-    """Ana site URL'sini belirle"""
     primary_url = "https://www.diziyou.one/"
     backup_url = "https://www.diziyou.io/"
     
     headers = get_random_headers()
-    
-    # Önce ana siteyi dene
     try:
-        print(f"Ana site kontrol ediliyor: {primary_url}")
         resp = requests.head(primary_url, headers=headers, timeout=10, allow_redirects=True)
         if resp.status_code < 400:
-            print(f"✓ Ana site kullanılabilir: {primary_url}")
             return primary_url.rstrip('/')
-    except Exception as e:
-        print(f"✗ Ana siteye erişilemedi: {e}")
+    except:
+        pass
     
-    # Yedek adresten yönlendirmeyi kontrol et
     try:
-        print(f"\nYedek adres kontrol ediliyor: {backup_url}")
         resp = requests.head(backup_url, headers=headers, timeout=10, allow_redirects=False)
-        
-        # Yönlendirme varsa Location header'ını al
         if 300 <= resp.status_code < 400:
             location = resp.headers.get('Location', '')
             if location:
-                final_url = location.rstrip('/')
-                print(f"✓ Yönlendirme bulundu: {final_url}")
-                return final_url
-    except Exception as e:
-        print(f"✗ Yedek adres kontrolü başarısız: {e}")
+                return location.rstrip('/')
+    except:
+        pass
     
-    print("ℹ Varsayılan ana site kullanılıyor")
     return primary_url.rstrip('/')
 
 def get_all_series_links(base_url):
-    """Tüm sayfalardan dizi linklerini topla"""
     series_list = []
     page = 1
-    max_pages = 100  # Üst sınır
     
-    print(f"\n{'='*50}")
-    print("Dizi linkleri toplanıyor...")
-    print(f"{'='*50}")
-    
-    while page <= max_pages:
-        # URL oluştur
-        if page == 1:
-            url = f"{base_url}/dizi-arsivi"
-        else:
-            url = f"{base_url}/dizi-arsivi/page/{page}"
-        
+    while True:
+        url = f"{base_url}/dizi-arsivi" if page == 1 else f"{base_url}/dizi-arsivi/page/{page}"
         headers = get_random_headers(base_url)
         
         try:
-            print(f"\n📄 Sayfa {page} çekiliyor...")
+            print(f"📄 Sayfa {page} çekiliyor...")
             resp = requests.get(url, headers=headers, timeout=20)
             resp.raise_for_status()
-            
             soup = BeautifulSoup(resp.content, 'html.parser')
             
-            # Bu sayfadaki dizi linklerini bul
             page_series = []
             links = soup.find_all('a', href=True, title=True)
             
             for link in links:
-                href = link.get('href', '')
-                title = link.get('title', '').strip()
+                href = link['href']
+                title = link['title'].strip()
                 
-                # Sadece dizi sayfalarını filtrele
                 if (href.startswith(base_url) and 
                     not href.endswith('/dizi-arsivi') and
-                    not 'page/' in href and
-                    title and
-                    len(title) > 2):
+                    'page/' not in href and
+                    title and len(title) > 2):
                     
-                    # Kopya kontrolü
-                    if not any(s['url'] == href for s in page_series):
-                        page_series.append({
-                            'name': title,
-                            'url': href
-                        })
+                    page_series.append({
+                        'name': title,
+                        'url': href,
+                        'poster': None
+                    })
             
             if not page_series:
-                print(f"⏹ Sayfa {page}'de dizi bulunamadı. Tarama durduruluyor.")
                 break
-            
+                
             series_list.extend(page_series)
-            print(f"✅ Sayfa {page}: {len(page_series)} dizi eklendi")
+            print(f"✅ {len(page_series)} dizi eklendi")
             
-            # Sonraki sayfa için hazırlık
+            # Her dizi için kapak resmini al
+            for series in page_series:
+                series['poster'] = get_series_poster(series['url'], base_url)
+            
             page += 1
-            time.sleep(1.5)  # Sunucu yükünü azalt
+            time.sleep(2)
             
         except Exception as e:
             print(f"❌ Sayfa {page} hatası: {e}")
             break
     
-    print(f"\n✅ Toplam {len(series_list)} dizi bulundu!")
-    return series_list[:100]  # Test için ilk 100 dizi (tümünü almak için bu satırı kaldır)
+    print(f"\n🎬 Toplam {len(series_list)} dizi bulundu")
+    return series_list[:30]  # Test için 30 dizi (hepsi için [:30] kaldır)
 
-def scrape_series_details(series_url, base_url):
-    """Bir dizinin tüm sezon ve bölüm bilgilerini çek"""
+def get_series_poster(series_url, base_url):
+    """Dizi kapak resmini al"""
+    headers = get_random_headers(base_url)
+    try:
+        resp = requests.get(series_url, headers=headers, timeout=15)
+        soup = BeautifulSoup(resp.content, 'html.parser')
+        
+        # Kapak resmini bul
+        poster_div = soup.find('div', class_='category_image')
+        if poster_div:
+            img = poster_div.find('img', src=True)
+            if img and 'src' in img.attrs:
+                return img['src']
+        
+        # Alternatif arama
+        img = soup.find('img', class_='poster')
+        if img and 'src' in img.attrs:
+            return img['src']
+            
+    except:
+        pass
+    
+    return "https://via.placeholder.com/300x450/2d2d2d/ffffff?text=No+Poster"
+
+def scrape_series_details(series_url, series_name, poster_url, base_url):
+    """Dizi detaylarını çek"""
     headers = get_random_headers(base_url)
     
     try:
         resp = requests.get(series_url, headers=headers, timeout=20)
-        resp.raise_for_status()
         soup = BeautifulSoup(resp.content, 'html.parser')
         
-        # Dizi ismini bul
-        series_name = "Bilinmeyen Dizi"
-        title_tag = soup.find('title')
-        if title_tag:
-            series_name = title_tag.text.split('|')[0].strip()
-        
-        # Sezon butonlarını bul
-        seasons = []
-        buttons_div = soup.find('div', id='butonlar')
-        if buttons_div:
-            season_buttons = buttons_div.find_all('button', class_='btn')
-            for btn in season_buttons:
-                season_text = btn.get('search-text', '').strip() or btn.text.strip()
-                if season_text:
-                    seasons.append(season_text)
-        
-        # Eğer sezon bulunamadıysa varsayılan ekle
-        if not seasons:
-            seasons = ['1. Sezon']
-        
-        # Bölümleri çek
         episodes = []
         episodes_container = soup.find('div', id='scrollbar-container')
         
@@ -177,78 +139,68 @@ def scrape_series_details(series_url, base_url):
             episode_links = episodes_container.find_all('a', href=True)
             
             for ep_link in episode_links:
-                ep_url = ep_link.get('href', '')
-                if not ep_url.startswith('http'):
-                    continue
+                ep_url = ep_link['href']
                 
-                # Bölüm bilgilerini çıkar
                 baslik_div = ep_link.find('div', class_='baslik')
                 tarih_div = ep_link.find('div', class_='tarih')
                 bolumismi_div = ep_link.find('div', class_='bolumismi')
                 
                 if baslik_div:
-                    episode_title = baslik_div.text.strip()
+                    raw_title = baslik_div.text.strip()
                     
                     # Sezon ve bölüm numaralarını çıkar
                     season_num = 1
                     episode_num = 1
                     
-                    # Regex ile sezon ve bölüm numaralarını bul
-                    season_match = re.search(r'(\d+)\s*[.]?\s*[Ss]ezon', episode_title)
-                    episode_match = re.search(r'(\d+)\s*[.]?\s*[Bb]ölüm', episode_title)
+                    season_match = re.search(r'(\d+)\s*[.]?\s*[Ss]ezon', raw_title)
+                    episode_match = re.search(r'(\d+)\s*[.]?\s*[Bb]ölüm', raw_title)
                     
                     if season_match:
                         season_num = int(season_match.group(1))
                     if episode_match:
                         episode_num = int(episode_match.group(1))
                     
-                    episode_date = tarih_div.text.strip() if tarih_div else "Tarih Yok"
+                    episode_date = tarih_div.text.strip() if tarih_div else ""
                     episode_name = bolumismi_div.text.strip('() ') if bolumismi_div else ""
                     
-                    # Formatlı bölüm ismi oluştur
-                    formatted_title = f"{series_name} - {season_num}. Sezon {episode_num}. Bölüm"
+                    # TVG formatında bölüm ismi
+                    tvg_name = f"{series_name} S{season_num:02d}E{episode_num:02d}"
                     if episode_name:
-                        formatted_title += f" - ({episode_name})"
-                    if episode_date != "Tarih Yok":
-                        formatted_title += f" - {episode_date}"
+                        tvg_name += f" - {episode_name}"
                     
                     episodes.append({
-                        'series_name': series_name,
                         'url': ep_url,
-                        'title': formatted_title,
+                        'tvg_name': tvg_name,
+                        'raw_title': raw_title,
                         'season': season_num,
                         'episode': episode_num,
                         'date': episode_date,
-                        'raw_title': episode_title
+                        'episode_name': episode_name
                     })
         
         return {
             'name': series_name,
             'url': series_url,
-            'seasons': seasons,
+            'poster': poster_url,
             'episodes': episodes
         }
         
     except Exception as e:
-        print(f"  ❌ Hata: {e}")
+        print(f"  ❌ {series_name} hatası: {e}")
         return {
-            'name': "Hatalı Dizi",
+            'name': series_name,
             'url': series_url,
-            'seasons': [],
+            'poster': poster_url,
             'episodes': []
         }
 
 def generate_m3u(all_series_data, base_url):
-    """M3U dosyası içeriğini oluştur"""
-    print(f"\n{'='*50}")
-    print("M3U dosyası oluşturuluyor...")
-    print(f"{'='*50}")
+    """Standart M3U formatında dosya oluştur"""
     
     m3u_lines = [
         '#EXTM3U',
-        f'#EXTCLOPT:Referer="{base_url}/"',
-        '#EXTCLOPT:User-Agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"',
-        f'#EXTCLOPT:Generated="{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}"',
+        f'# Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}',
+        f'# Base URL: {base_url}',
         ''
     ]
     
@@ -258,70 +210,81 @@ def generate_m3u(all_series_data, base_url):
         if not series['episodes']:
             continue
             
-        series_name = series['name']
-        print(f"📺 {series_name}: {len(series['episodes'])} bölüm")
-        
-        # Grup başlığı (isteğe bağlı, bazı oynatıcılar destekler)
-        m3u_lines.append(f'#EXTGRP:{series_name}')
+        print(f"📺 {series['name']}: {len(series['episodes'])} bölüm")
         
         for episode in series['episodes']:
-            m3u_lines.append(f'#EXTINF:-1, {episode["title"]}')
+            # EXTINF satırı - TVG formatında
+            duration = -1  # Bilinmiyor
+            tvg_id = f"{series['name'].replace(' ', '_')}_S{episode['season']:02d}E{episode['episode']:02d}"
+            
+            extinf_line = f'#EXTINF:{duration} tvg-id="{tvg_id}" tvg-name="{episode["tvg_name"]}" tvg-logo="{series["poster"]}" group-title="{series["name"]}",{episode["tvg_name"]}'
+            
+            m3u_lines.append(extinf_line)
             m3u_lines.append(episode['url'])
             total_episodes += 1
     
     print(f"\n✅ Toplam {total_episodes} bölüm M3U'ya eklendi!")
-    
     return '\n'.join(m3u_lines)
 
 def main():
-    """Ana fonksiyon"""
     print("="*60)
-    print("DİZİYOU M3U OLUŞTURUCU")
+    print("DİZİYOU M3U OLUŞTURUCU - TVG FORMAT")
     print("="*60)
     
-    # 1. Ana URL'yi belirle
+    # 1. Ana URL
     base_url = get_base_url()
+    print(f"🌐 Site: {base_url}")
     
-    # 2. Tüm dizi linklerini al
+    # 2. Dizi linkleri ve posterler
     series_links = get_all_series_links(base_url)
     
     if not series_links:
-        print("\n❌ Hiç dizi bulunamadı! Script durduruluyor.")
+        print("\n❌ Hiç dizi bulunamadı!")
         return
     
-    # 3. Her dizi için detayları çek
+    # 3. Her dizi için detaylar
     print(f"\n{'='*50}")
-    print("Dizi detayları çekiliyor...")
-    print(f"{'='*50}")
+    print("Bölüm bilgileri çekiliyor...")
     
     all_series_data = []
-    for i, series in enumerate(series_links[:50], 1):  # İlk 50 dizi (tümü için [:50] kaldır)
-        print(f"\n[{i}/{min(50, len(series_links))}] {series['name']}")
-        series_data = scrape_series_details(series['url'], base_url)
+    for i, series in enumerate(series_links, 1):
+        print(f"\n[{i}/{len(series_links)}] {series['name']}")
+        series_data = scrape_series_details(
+            series['url'], 
+            series['name'], 
+            series['poster'], 
+            base_url
+        )
         all_series_data.append(series_data)
-        time.sleep(1)  # Sunucu yükünü azalt
+        time.sleep(1)
     
     # 4. M3U oluştur
     m3u_content = generate_m3u(all_series_data, base_url)
     
     # 5. Dosyaya yaz
-    output_file = "diziyou.m3u"
     try:
-        with open(output_file, 'w', encoding='utf-8') as f:
+        with open("diziyou.m3u", "w", encoding="utf-8") as f:
             f.write(m3u_content)
-        print(f"\n✅ M3U dosyası başarıyla oluşturuldu: {output_file}")
-        print(f"📁 Dosya boyutu: {len(m3u_content)} karakter")
         
-        # Dosyadan örnek göster
-        print(f"\n📄 M3U Önizleme (ilk 5 satır):")
+        # Kontrol
+        with open("diziyou.m3u", "r", encoding="utf-8") as f:
+            lines = f.readlines()
+        
+        print(f"\n✅ M3U dosyası oluşturuldu!")
+        print(f"📊 Dosya boyutu: {len(m3u_content)} karakter")
+        print(f"📄 Satır sayısı: {len(lines)}")
+        print(f"💾 Kaydedildi: diziyou.m3u")
+        
+        # Örnek göster
+        print("\n📋 İlk 3 giriş:")
         print("-"*40)
-        lines = m3u_content.split('\n')[:7]
-        for line in lines:
+        for line in m3u_content.split('\n')[:7]:
             print(line)
         print("-"*40)
         
     except Exception as e:
         print(f"\n❌ Dosya yazma hatası: {e}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
