@@ -1,59 +1,127 @@
 name: Generate Diziyou M3U
 
 on:
-  workflow_dispatch:  # Manuel çalıştırma
+  # SADECE manuel çalıştırma için (PUSH TETİKLEYİCİSİ YOK)
+  workflow_dispatch:
+    inputs:
+      comment:
+        description: 'Not (isteğe bağlı)'
+        required: false
+        default: 'Manuel çalıştırma'
+  # Otomatik zamanlama (36 saatte bir)
   schedule:
-    # Her 36 saatte bir otomatik çalıştır
     - cron: '0 */36 * * *'
+  # PUSH TETİKLEYİCİSİ YOK - kod kaydedince otomatik başlamaz
 
 jobs:
   generate-m3u:
     runs-on: ubuntu-latest
-    timeout-minutes: 30  # Paralel işlemle 30 dakika YETERLİ
+    timeout-minutes: 15  # Optimize ile 15 dakika YETERLİ
     
     steps:
-    - name: 🛎️ Repository'yi al
+    - name: ✅ Repository'yi al
       uses: actions/checkout@v3
     
-    - name: 🐍 Python kurulumu
+    - name: 🐍 Python 3.10 kur
       uses: actions/setup-python@v4
       with:
         python-version: '3.10'
     
-    - name: 📦 Gereksinimleri yükle
+    - name: 📦 Bağımlılıkları yükle
       run: |
-        python -m pip install --upgrade pip
+        pip install --upgrade pip
         pip install requests==2.31.0 beautifulsoup4==4.12.0
     
-    - name: 🚀 OPTİMİZE M3U oluştur
+    - name: 🚀 M3U oluştur ve KONTROL ET
       id: generate
       run: |
-        echo "OPTİMİZE PARALEL SCRIPT ÇALIŞTIRILIYOR..."
+        echo "=== DİZİYOU M3U OLUŞTURUCU BAŞLATILIYOR ==="
+        echo "Tarih: $(date)"
+        echo "Commit: ${{ github.sha }}"
+        echo ""
+        
+        # Script'i çalıştır
         python diziyou_m3u.py
         
         echo ""
+        echo "=== DOSYA OLUŞUM KONTROLÜ ==="
+        
+        # KESİNLİKLE DOSYA VAR MI KONTROL
         if [ -f "diziyou.m3u" ]; then
-          echo "✅ diziyou.m3u oluşturuldu"
-          echo "📊 Boyut: $(ls -lh diziyou.m3u | awk '{print $5}')"
-          echo "📄 Satır: $(wc -l < diziyou.m3u)"
+          # Dosya bilgileri
+          FILE_SIZE=$(wc -c < diziyou.m3u)
+          LINES=$(wc -l < diziyou.m3u)
+          echo "✅ BAŞARILI: diziyou.m3u OLUŞTU"
+          echo "📏 Boyut: $FILE_SIZE byte"
+          echo "📄 Satır sayısı: $LINES"
+          echo "📍 Yol: $(pwd)/diziyou.m3u"
+          
+          # İlk 3 satırı göster
+          echo ""
+          echo "=== İLK 3 GİRİŞ ÖRNEĞİ ==="
+          head -8 diziyou.m3u
+          
+          # Çıktı değişkenlerini ayarla
           echo "file_created=true" >> $GITHUB_OUTPUT
+          echo "file_size=$FILE_SIZE" >> $GITHUB_OUTPUT
         else
-          echo "❌ HATA: M3U dosyası oluşturulamadı!"
+          echo "❌ HATA: diziyou.m3u DOSYASI OLUŞMADI!"
+          echo "Mevcut dosyalar:"
+          ls -la
           echo "file_created=false" >> $GITHUB_OUTPUT
           exit 1
         fi
     
-    - name: 💾 Depoya kaydet
+    - name: 💾 DEPOYA KESİN KAYDET
       if: steps.generate.outputs.file_created == 'true'
       run: |
+        echo "=== DEPOYA KAYDETME İŞLEMİ ==="
+        
+        # Git ayarları
         git config --global user.name "GitHub Actions"
         git config --global user.email "actions@github.com"
         
-        if git diff --name-only | grep -q "diziyou.m3u"; then
-          git add diziyou.m3u
-          git commit -m "🤖 M3U paralel güncelleme [$(date +'%Y-%m-%d %H:%M')]"
-          git push
-          echo "✅ Depoya kaydedildi"
+        # M3U dosyasını ekle
+        git add diziyou.m3u
+        
+        # Değişiklik kontrolü
+        if git diff --cached --quiet; then
+          echo "ℹ️  Değişiklik yok, commit atlanıyor"
         else
-          echo "ℹ️  Değişiklik yok"
+          # Commit mesajı
+          COMMIT_MSG="🤖 M3U güncellendi [$(date +'%Y-%m-%d %H:%M:%S')]"
+          
+          # Commit yap
+          git commit -m "$COMMIT_MSG"
+          
+          # Depoya gönder
+          echo "🔄 Depoya gönderiliyor..."
+          git push
+          echo "✅ Değişiklikler depoya kaydedildi"
+        fi
+    
+    - name: 📊 SONUÇ ÖZETİ
+      if: always()
+      run: |
+        echo "=== İŞLEM SONUÇ ÖZETİ ==="
+        echo "Workflow: ${{ github.workflow }}"
+        echo "Çalıştırma ID: ${{ github.run_id }}"
+        echo "Tarih: $(date)"
+        
+        if [ -f "diziyou.m3u" ]; then
+          echo ""
+          echo "🎉 BAŞARILI: M3U dosyası oluşturuldu"
+          echo "📁 $(pwd)/diziyou.m3u"
+          echo "📊 Boyut: $(wc -c < diziyou.m3u) byte"
+          echo ""
+          echo "Depodaki dosyaya erişmek için:"
+          echo "https://github.com/${{ github.repository }}/blob/main/diziyou.m3u"
+        else
+          echo ""
+          echo "❌ BAŞARISIZ: M3U dosyası oluşturulamadı"
+          echo ""
+          echo "Sorun giderme:"
+          echo "1. 'M3U oluştur' adımının çıktılarını kontrol edin"
+          echo "2. Python script hatalarını kontrol edin"
+          echo "3. Network bağlantısını kontrol edin"
         fi
