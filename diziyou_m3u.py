@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-DİZİYOU M3U OLUŞTURUCU - FİNAL OPTİMİZE SÜRÜM (S01-E01 Formatında)
+DİZİYOU M3U OLUŞTURUCU - TAM DÜZELTMELİ SÜRÜM
 """
 import requests
 import random
@@ -48,7 +48,6 @@ def get_base_url():
     
     return "https://www.diziyou.one".rstrip('/')
 
-# === OPTİMİZE PARALEL FONKSİYONLAR ===
 def fetch_dizi_page(args):
     """Bir sayfadaki tüm dizi linklerini çek"""
     page_num, base_url = args
@@ -86,7 +85,7 @@ def fetch_dizi_page(args):
         return page_num, [], str(e)
 
 def fetch_episodes_for_series(series):
-    """Bir dizinin tüm bölümlerini çek (POSTER ÇEKİMİ YOK)"""
+    """Bir dizinin tüm bölümlerini çek - TÜM DÜZELTMELER BURADA"""
     series_name = series['name']
     series_url = series['url']
     
@@ -99,7 +98,6 @@ def fetch_episodes_for_series(series):
         # Bölümleri bul
         container = soup.find('div', id='scrollbar-container')
         if not container:
-            # Alternatif container arama
             container = soup.find('div', class_=re.compile(r'episodes|bolumler|container', re.I))
         
         if container:
@@ -128,25 +126,37 @@ def fetch_episodes_for_series(series):
                     if episode_match:
                         episode_num = int(episode_match.group(1))
                     
+                    # HER BÖLÜMÜN KENDİ TARİHİ - DÜZELTME 1
                     episode_date = tarih.text.strip() if tarih else ""
+                    
+                    # Tarihi temizle (gereksiz boşlukları kaldır)
+                    if episode_date:
+                        episode_date = ' '.join(episode_date.split())
+                    
                     episode_name = bolum_adi.text.strip('() ') if bolum_adi else ""
                     
-                    # TVG formatında isim - DEĞİŞTİRİLDİ: S01E01 → S01-E01
+                    # TVG formatında isim - S01-E01 formatında
                     if episode_name:
                         tvg_name = f"{series_name} S{season_num:02d}-E{episode_num:02d} - {episode_name}"
                     else:
                         tvg_name = f"{series_name} S{season_num:02d}-E{episode_num:02d}"
                     
-                    # TVG ID - DEĞİŞTİRİLDİ: S01E01 → S01-E01
+                    # TVG ID - S01-E01 formatında
                     tvg_id = re.sub(r'[^\w]', '_', f"{series_name}_S{season_num:02d}-E{episode_num:02d}")
                     
+                    # URL DÜZELTMELERİ - DÜZELTME 2 ve 3
+                    # 1. Sonundaki / karakterini temizle
+                    clean_ep_url = ep_url.rstrip('/')
+                    # 2. Sonuna .m3u8 ekle
+                    final_ep_url = f"{clean_ep_url}.m3u8"
+                    
                     episodes.append({
-                        'url': ep_url,
+                        'url': final_ep_url,  # DÜZELTİLMİŞ URL
                         'tvg_id': tvg_id,
                         'tvg_name': tvg_name,
                         'group_title': series_name,
-                        'date': episode_date,
-                        'poster': SABIT_POSTER  # SABİT POSTER KULLAN
+                        'date': episode_date,  # HER BÖLÜMÜN KENDİ TARİHİ
+                        'poster': SABIT_POSTER
                     })
         
     except Exception as e:
@@ -156,7 +166,7 @@ def fetch_episodes_for_series(series):
 
 def main():
     print("="*70)
-    print("🎬 DİZİYOU M3U OLUŞTURUCU - FİNAL OPTİMİZE SÜRÜM (S01-E01 Formatında)")
+    print("🎬 DİZİYOU M3U OLUŞTURUCU - TÜM DÜZELTMELERLE")
     print("="*70)
     
     start_time = time.time()
@@ -197,7 +207,7 @@ def main():
     
     print(f"\n🎬 {len(unique_series)} BENZERSİZ DİZİ BULUNDU!")
     
-    # 3. TÜM BÖLÜMLERİ PARALEL ÇEK (POSTER ÇEKİMİ YOK)
+    # 3. TÜM BÖLÜMLERİ PARALEL ÇEK
     print(f"\n🎥 {len(unique_series)} DİZİNİN BÖLÜMLERİ PARALEL ÇEKİLİYOR...")
     all_episodes = []
     
@@ -230,20 +240,20 @@ def main():
     ]
     
     for ep in all_episodes:
-        # EXTINF satırı - DEĞİŞTİRİLDİ: tvg-name artık S01-E01 formatında
+        # EXTINF satırı - S01-E01 formatında
         extinf_line = f'#EXTINF:-1 tvg-id="{ep["tvg_id"]}"'
         extinf_line += f' tvg-name="{ep["tvg_name"]}"'
-        extinf_line += f' tvg-logo="{SABIT_POSTER}"'  # SABİT POSTER
+        extinf_line += f' tvg-logo="{SABIT_POSTER}"'
         extinf_line += f' group-title="{ep["group_title"]}"'
         
-        # Display title
+        # Display title - HER BÖLÜMÜN KENDİ TARİHİ İLE
         if ep['date']:
             extinf_line += f',{ep["tvg_name"]} ({ep["date"]})'
         else:
             extinf_line += f',{ep["tvg_name"]}'
         
         m3u_lines.append(extinf_line)
-        m3u_lines.append(ep['url'])
+        m3u_lines.append(ep['url'])  # DÜZELTİLMİŞ URL (.m3u8'li)
     
     # 5. DOSYAYA KESİNLİKLE YAZ
     output_file = "diziyou.m3u"
@@ -264,14 +274,12 @@ def main():
         print(f"💾 Dosya: {output_file}")
         print(f"📏 Boyut: {file_size:,} byte ({file_size/1024/1024:.2f} MB)")
         print(f"📄 Satır: {len(m3u_lines)}")
-        print(f"📍 Tam yol: {os.path.abspath(output_file)}")
         
-        # KESİN DOSYA VAR MI KONTROL
         if os.path.exists(output_file):
             print(f"\n✅ DOSYA KONTROLÜ: {output_file} BAŞARIYLA OLUŞTURULDU!")
             
-            # Örnek göster (yeni format ile)
-            print("\n📋 İLK 3 BÖLÜM ÖRNEĞİ (YENİ S01-E01 FORMATI):")
+            # Örnek göster
+            print("\n📋 İLK 3 BÖLÜM ÖRNEĞİ (TÜM DÜZELTMELERLE):")
             print("-"*60)
             with open(output_file, 'r', encoding='utf-8') as f:
                 for i in range(8):
@@ -281,10 +289,9 @@ def main():
                     print(line.rstrip())
             print("-"*60)
             
-            # Örnek çıktı formatı
             print("\n📝 ÖRNEK ÇIKTI FORMATI:")
             print("#EXTINF:-1 tvg-id=\"Breaking_Bad_S01-E01\" tvg-name=\"Breaking Bad S01-E01 - Pilot\"")
-            print("https://www.diziyou.one/breaking-bad-1-sezon-1-bolum/")
+            print("https://www.diziyou.one/breaking-bad-1-sezon-1-bolum.m3u8")
         else:
             print(f"\n❌ KRİTİK HATA: {output_file} DOSYASI OLUŞMADI!")
             sys.exit(1)
