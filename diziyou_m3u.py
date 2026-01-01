@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-DİZİYOU M3U OLUŞTURUCU - FİNAL OPTİMİZE SÜRÜM
+DİZİYOU M3U OLUŞTURUCU - FİNAL OPTİMİZE SÜRÜM (S01-E01 Formatında)
 """
 import requests
 import random
@@ -131,13 +131,14 @@ def fetch_episodes_for_series(series):
                     episode_date = tarih.text.strip() if tarih else ""
                     episode_name = bolum_adi.text.strip('() ') if bolum_adi else ""
                     
-                    # TVG formatında isim
+                    # TVG formatında isim - DEĞİŞTİRİLDİ: S01E01 → S01-E01
                     if episode_name:
-                        tvg_name = f"{series_name} S{season_num:02d}E{episode_num:02d} - {episode_name}"
+                        tvg_name = f"{series_name} S{season_num:02d}-E{episode_num:02d} - {episode_name}"
                     else:
-                        tvg_name = f"{series_name} S{season_num:02d}E{episode_num:02d}"
+                        tvg_name = f"{series_name} S{season_num:02d}-E{episode_num:02d}"
                     
-                    tvg_id = re.sub(r'[^\w]', '_', f"{series_name}_S{season_num:02d}E{episode_num:02d}")
+                    # TVG ID - DEĞİŞTİRİLDİ: S01E01 → S01-E01
+                    tvg_id = re.sub(r'[^\w]', '_', f"{series_name}_S{season_num:02d}-E{episode_num:02d}")
                     
                     episodes.append({
                         'url': ep_url,
@@ -155,7 +156,7 @@ def fetch_episodes_for_series(series):
 
 def main():
     print("="*70)
-    print("🎬 DİZİYOU M3U OLUŞTURUCU - FİNAL OPTİMİZE SÜRÜM")
+    print("🎬 DİZİYOU M3U OLUŞTURUCU - FİNAL OPTİMİZE SÜRÜM (S01-E01 Formatında)")
     print("="*70)
     
     start_time = time.time()
@@ -229,7 +230,7 @@ def main():
     ]
     
     for ep in all_episodes:
-        # EXTINF satırı
+        # EXTINF satırı - DEĞİŞTİRİLDİ: tvg-name artık S01-E01 formatında
         extinf_line = f'#EXTINF:-1 tvg-id="{ep["tvg_id"]}"'
         extinf_line += f' tvg-name="{ep["tvg_name"]}"'
         extinf_line += f' tvg-logo="{SABIT_POSTER}"'  # SABİT POSTER
@@ -269,8 +270,8 @@ def main():
         if os.path.exists(output_file):
             print(f"\n✅ DOSYA KONTROLÜ: {output_file} BAŞARIYLA OLUŞTURULDU!")
             
-            # Örnek göster
-            print("\n📋 İLK 3 BÖLÜM ÖRNEĞİ:")
+            # Örnek göster (yeni format ile)
+            print("\n📋 İLK 3 BÖLÜM ÖRNEĞİ (YENİ S01-E01 FORMATI):")
             print("-"*60)
             with open(output_file, 'r', encoding='utf-8') as f:
                 for i in range(8):
@@ -279,6 +280,11 @@ def main():
                         break
                     print(line.rstrip())
             print("-"*60)
+            
+            # Örnek çıktı formatı
+            print("\n📝 ÖRNEK ÇIKTI FORMATI:")
+            print("#EXTINF:-1 tvg-id=\"Breaking_Bad_S01-E01\" tvg-name=\"Breaking Bad S01-E01 - Pilot\"")
+            print("https://www.diziyou.one/breaking-bad-1-sezon-1-bolum/")
         else:
             print(f"\n❌ KRİTİK HATA: {output_file} DOSYASI OLUŞMADI!")
             sys.exit(1)
